@@ -129,28 +129,28 @@ void CreateEncoder() {
   encoder = chromemedia::codec::LyraEncoder::Create(
       /*sample_rate_hz=*/48000,
       /*num_channels=*/1,
-      /*bitrate=*/3200,
-      /*enable_dtx=*/false, model_buffer);
+      /*bitrate=*/6000,
+      /*enable_dtx=*/true, model_buffer);
 
   // Create encoders at different sample rates because the input audio sample
   // rate is not know at this time.
   encoder_16khz = chromemedia::codec::LyraEncoder::Create(
       /*sample_rate_hz=*/16000,
       /*num_channels=*/1,
-      /*bitrate=*/3200,
-      /*enable_dtx=*/false, model_buffer);
+      /*bitrate=*/6000,
+      /*enable_dtx=*/true, model_buffer);
 
   encoder_32khz = chromemedia::codec::LyraEncoder::Create(
       /*sample_rate_hz=*/32000,
       /*num_channels=*/1,
-      /*bitrate=*/3200,
-      /*enable_dtx=*/false, model_buffer);
+      /*bitrate=*/6000,
+      /*enable_dtx=*/true, model_buffer);
 
   encoder_8khz = chromemedia::codec::LyraEncoder::Create(
       /*sample_rate_hz=*/8000,
       /*num_channels=*/1,
-      /*bitrate=*/3200,
-      /*enable_dtx=*/false, model_buffer);
+      /*bitrate=*/6000,
+      /*enable_dtx=*/true, model_buffer);
 
   if (encoder == nullptr || encoder_32khz == nullptr ||
       encoder_16khz == nullptr || encoder_8khz == nullptr) {
@@ -254,6 +254,124 @@ bool EncodeAndDecodeWithLyra(uintptr_t data, uint32_t num_samples,
   return true;
 }
 
+
+uint32_t EncodeWithLyra(uintptr_t data, uint32_t num_bytes,
+                    uint32_t sample_rate_hz, uintptr_t out_data) {
+  fprintf(stdout, "Encode called with %d bytes.\n", num_bytes);
+
+  chromemedia::codec::LyraEncoder* encoder_to_use = nullptr;
+  if (sample_rate_hz == 48000) {
+    encoder_to_use = encoder.get();
+  } else if (sample_rate_hz == 16000) {
+    encoder_to_use = encoder_16khz.get();
+  } else if (sample_rate_hz == 32000) {
+    encoder_to_use = encoder_32khz.get();
+  } else if (sample_rate_hz == 8000) {
+    encoder_to_use = encoder_8khz.get();
+  } else {
+    fprintf(stderr,
+            "Unsupported sample rate: %d. Only %d, %d, %d and %d khz sample "
+            "rates are supported.\n",
+            sample_rate_hz, 48000, 16000, 32000, 8000);
+    return 0;
+  }
+
+  uint8_t* data_ptr = reinterpret_cast<uint8_t*>(data);
+  std::vector<int16_t> data_to_encode(num_bytes / 2);
+  for (int i = 0; i < num_bytes / 2; i++) {
+    data_to_encode[i] = data_ptr[2 * i] << 8 | data_ptr[2 * i + 1];
+  }
+
+  auto maybe_encoded_output = chromemedia::codec::EncodeWithEncoder(
+      encoder_to_use, data_to_encode, sample_rate_hz);
+  if (!maybe_encoded_output.has_value()) {
+    fprintf(stderr, "Failed to encode.\n");
+    return 0;
+  }
+
+  if (maybe_encoded_output.value().empty()) {
+    fprintf(stderr,
+            "No encorded output. The number of bytes sent for encode "
+            "(%d) was probably too small.\n",
+            num_bytes);
+    return 0;
+  }
+
+  // Convert the encoded output to uint8_t.
+  const uint32_t num_encoded_bytes = maybe_encoded_output.value().size();
+  uint8_t* out_data_ptr = reinterpret_cast<uint8_t*>(out_data);
+  const std::vector<uint8_t>& encoded_output = maybe_encoded_output.value();
+  for (uint32_t i = 0; i < num_encoded_bytes; i++) {
+    out_data_ptr[i] = encoded_output[i];
+    fprintf(stdout, "%x ", out_data_ptr[i]);
+  }
+
+  fprintf(stdout, "Encode succeeded. Returning %d bytes.\n",
+          num_encoded_bytes);
+  return num_encoded_bytes;
+}
+
+uint32_t DecodeWithLyra(uintptr_t data, uint32_t num_samples,
+                        uint32_t sample_rate_hz, uintptr_t out_data) {
+  fprintf(stdout, "Decode called with %d samples.\n", num_samples);
+
+  chromemedia::codec::LyraDecoder* decoder_to_use = nullptr;
+  if (sample_rate_hz == 48000) {
+    decoder_to_use = decoder.get();
+  } else if (sample_rate_hz == 16000) {
+    decoder_to_use = decoder_16khz.get();
+  } else if (sample_rate_hz == 32000) {
+    decoder_to_use = decoder_32khz.get();
+  } else if (sample_rate_hz == 8000) {
+    decoder_to_use = decoder_8khz.get();
+  } else {
+    fprintf(stderr,
+            "Unsupported sample rate: %d. Only %d, %d, %d and %d khz sample "
+            "rates are supported.\n",
+            sample_rate_hz, 48000, 16000, 32000, 8000);
+    return 0;
+  }
+
+  uint8_t* data_ptr = reinterpret_cast<uint8_t*>(data);
+  std::vector<uint8_t> data_to_decode(num_samples);
+  for (int i = 0; i < num_samples; i++) {
+    data_to_decode[i] = data_ptr[i];
+    fprintf(stdout, "%x ", data_to_decode[i]);
+  }
+
+  auto maybe_decoded_output = chromemedia::codec::DecodeWithDecoder(
+      decoder_to_use, data_to_decode,
+      /*packet_loss_rate=*/0.f,
+      /*float_average_burst_length=*/1.f,
+      /*bitrate=*/6000);
+  if (!maybe_decoded_output.has_value()) {
+    fprintf(stderr, "Failed to decode.\n");
+    return 0;
+  }
+
+  if (maybe_decoded_output.value().empty()) {
+    fprintf(stderr,
+            "No decoded output. The number of samples sent for encode and "
+            "decode (%d) was probably too small.\n",
+            num_samples);
+    return 0;
+  }
+
+  // Convert the decoded output to float.
+  const int num_decoded_samples = maybe_decoded_output.value().size();
+  int8_t* out_data_ptr = reinterpret_cast<int8_t*>(out_data);
+  const std::vector<int16_t>& decoded_output = maybe_decoded_output.value();
+  for (int i = 0; i < num_decoded_samples; ++i) {
+    uint16_t s = decoded_output[i];
+    out_data_ptr[2 * i] = s >> 8;
+    out_data_ptr[2 * i + 1] = s;
+  }
+
+  fprintf(stdout, "Decode succeeded. Returning %d bytes.\n",
+          num_decoded_samples * 2);
+  return num_decoded_samples * 2;
+}
+
 bool IsCodecReady() { return encoders_initialized && decoders_initialized; }
 
 int main(int argc, char* argv[]) {
@@ -264,5 +382,9 @@ int main(int argc, char* argv[]) {
 EMSCRIPTEN_BINDINGS(module) {
   emscripten::function("isCodecReady", IsCodecReady);
   emscripten::function("encodeAndDecode", EncodeAndDecodeWithLyra,
+                       emscripten::allow_raw_pointers());
+  emscripten::function("encode", EncodeWithLyra,
+                       emscripten::allow_raw_pointers());
+  emscripten::function("decode", DecodeWithLyra,
                        emscripten::allow_raw_pointers());
 }
