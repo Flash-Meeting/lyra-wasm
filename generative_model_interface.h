@@ -108,8 +108,6 @@ protected:
      : num_samples_per_hop_(num_samples_per_hop),
        num_features_(num_features),
        next_sample_in_hop_(0) {
-   std::cout << "Number of features: " << num_features;
-   std::cout << "Number of samples per feature: " << num_samples_per_hop;
  }
 
  // Process the features on top of the queue.

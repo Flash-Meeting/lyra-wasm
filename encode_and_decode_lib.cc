@@ -19,8 +19,6 @@ namespace codec {
 std::optional<std::vector<uint8_t>> EncodeWithEncoder(
     LyraEncoder* encoder, const std::vector<int16_t>& wav_data,
     int sample_rate_hz) {
-  const auto benchmark_start = absl::Now();
-
   std::vector<uint8_t> encoded_features;
   const int num_samples_per_packet = sample_rate_hz / encoder->frame_rate();
   // Iterate over the wav data until the end of the vector.
@@ -42,10 +40,6 @@ std::optional<std::vector<uint8_t>> EncodeWithEncoder(
     encoded_features.insert(encoded_features.end(), encoded_or.value().begin(),
                             encoded_or.value().end());
   }
-  const auto elapsed = absl::Now() - benchmark_start;
-  std::cout << "Elapsed seconds : " << absl::ToInt64Seconds(elapsed);
-  std::cout << "Samples per second : "
-            << wav_data.size() / absl::ToDoubleSeconds(elapsed);
 
   return encoded_features;
 }
@@ -65,7 +59,6 @@ std::optional<std::vector<int16_t>> DecodeWithDecoder(
   const int num_samples_per_packet =
       GetNumSamplesPerHop(decoder->sample_rate_hz());
   std::vector<int16_t> decoded_audio;
-  const auto decode_benchmark_start = absl::Now();
   for (int encoded_index = 0; encoded_index < encoded_features.size();
        encoded_index += packet_size) {
     const absl::Span<const uint8_t> encoded_packet = absl::MakeConstSpan(
@@ -99,14 +92,6 @@ std::optional<std::vector<int16_t>> DecodeWithDecoder(
     }
   }
 
-  const auto decode_elapsed = absl::Now() - decode_benchmark_start;
-  std::cout << "INFO: Decoding elapsed seconds : "
-            << absl::ToInt64Seconds(decode_elapsed) << std::endl;
-  std::cout << "INFO: Decoding samples per second : "
-            << decoded_audio.size() / absl::ToDoubleSeconds(decode_elapsed)
-            << std::endl;
-  fprintf(stdout, "Output from decoder has %ld samples.\n",
-          decoded_audio.size());
   return decoded_audio;
 }
 

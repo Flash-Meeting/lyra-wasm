@@ -257,8 +257,6 @@ bool EncodeAndDecodeWithLyra(uintptr_t data, uint32_t num_samples,
 
 uint32_t EncodeWithLyra(uintptr_t data, uint32_t num_bytes,
                     uint32_t sample_rate_hz, uintptr_t out_data) {
-  fprintf(stdout, "Encode called with %d bytes.\n", num_bytes);
-
   chromemedia::codec::LyraEncoder* encoder_to_use = nullptr;
   if (sample_rate_hz == 48000) {
     encoder_to_use = encoder.get();
@@ -290,10 +288,6 @@ uint32_t EncodeWithLyra(uintptr_t data, uint32_t num_bytes,
   }
 
   if (maybe_encoded_output.value().empty()) {
-    fprintf(stderr,
-            "No encorded output. The number of bytes sent for encode "
-            "(%d) was probably too small.\n",
-            num_bytes);
     return 0;
   }
 
@@ -306,15 +300,11 @@ uint32_t EncodeWithLyra(uintptr_t data, uint32_t num_bytes,
     fprintf(stdout, "%x ", out_data_ptr[i]);
   }
 
-  fprintf(stdout, "Encode succeeded. Returning %d bytes.\n",
-          num_encoded_bytes);
   return num_encoded_bytes;
 }
 
 uint32_t DecodeWithLyra(uintptr_t data, uint32_t num_samples,
                         uint32_t sample_rate_hz, uintptr_t out_data) {
-  fprintf(stdout, "Decode called with %d samples.\n", num_samples);
-
   chromemedia::codec::LyraDecoder* decoder_to_use = nullptr;
   if (sample_rate_hz == 48000) {
     decoder_to_use = decoder.get();
@@ -367,8 +357,6 @@ uint32_t DecodeWithLyra(uintptr_t data, uint32_t num_samples,
     out_data_ptr[2 * i + 1] = s;
   }
 
-  fprintf(stdout, "Decode succeeded. Returning %d bytes.\n",
-          num_decoded_samples * 2);
   return num_decoded_samples * 2;
 }
 
